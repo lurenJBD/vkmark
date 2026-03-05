@@ -55,6 +55,28 @@ jobs:
       if: failure()
       run: cat build/meson-logs/meson-log.txt
 
+    - name: Bundle DLLs
+      run: |
+        BIN_DIR="install_vkmark_mingw_arm64/bin"
+        echo "Scanning for dependencies in $BIN_DIR..."
+        
+        # Scan all executables and DLLs in the directory
+        for target in "$BIN_DIR"/*.exe "$BIN_DIR"/*.dll; do
+            if [ -f "$target" ]; then
+                echo "Processing $(basename "$target")..."
+                deps=$(ldd "$target" | grep "=>" | grep -v -i "/c/WINDOWS" | awk '{print $3}')
+                for dep in $deps; do
+                    if [ -f "$dep" ]; then
+                        dep_name=$(basename "$dep")
+                        if [ ! -f "$BIN_DIR/$dep_name" ]; then
+                            echo "  Bundling: $dep_name"
+                            cp "$dep" "$BIN_DIR/"
+                        fi
+                    fi
+                done
+            fi
+        done
+
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
