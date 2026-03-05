@@ -60,15 +60,16 @@ jobs:
         BIN_DIR="install_vkmark_mingw_arm64"
         echo "Scanning for dependencies in $BIN_DIR..."
         
-        # Scan all executables and DLLs in the directory
-        for target in "$BIN_DIR"/*.exe "$BIN_DIR"/*.dll; do
+        # Capture the initial list of executables and DLLs so we don't infinitely process newly copied DLLs
+        mapfile -t targets < <(find "$BIN_DIR" -maxdepth 1 -type f \( -name "*.exe" -o -name "*.dll" \))
+        for target in "${targets[@]}"; do
             if [ -f "$target" ]; then
                 echo "Processing $(basename "$target")..."
                 echo "--- ldd output for $target ---"
-                ldd "$target" || true
+                timeout 30s ldd "$target" || true
                 echo "------------------------------"
                 # Extract absolute MSYS2 paths directly from ldd output
-                deps=$(ldd "$target" 2>/dev/null | grep "=>" | grep -v "not found" | awk '{print $3}' | grep -i -E "^(/clangarm64|/usr)/")
+                deps=$(timeout 30s ldd "$target" 2>/dev/null | grep "=>" | grep -v "not found" | awk '{print $3}' | grep -i -E "^(/clangarm64|/usr)/")
                 echo "Parsed deps for $(basename "$target"):"
                 echo "$deps"
                 for dep_path in $deps; do
