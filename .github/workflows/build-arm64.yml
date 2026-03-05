@@ -65,16 +65,29 @@ jobs:
             if [ -f "$target" ]; then
                 echo "Processing $(basename "$target")..."
                 echo "--- ldd output for $target ---"
-                ldd "$target"
+                ldd "$target" || true
                 echo "------------------------------"
-                deps=$(ldd "$target" | grep -i "\.dll" | grep -v -i "c:/windows" | awk '{print $3}' | grep -i "\.dll")
-                echo "Parsed deps for $(basename "$target"): $deps"
-                for dep in $deps; do
-                    if [ -f "$dep" ]; then
-                        dep_name=$(basename "$dep")
-                        if [ ! -f "$BIN_DIR/$dep_name" ]; then
-                            echo "  Bundling: $dep_name"
-                            cp "$dep" "$BIN_DIR/"
+                # Extract just the DLL filename
+                deps=$(ldd "$target" 2>/dev/null | grep -i '\.dll' | grep -v -i 'c:/windows' | grep -v -i 'system32' | awk '{print $1}')
+                echo "Parsed deps for $(basename "$target"):"
+                echo "$deps"
+                for dep_name in $deps; do
+                    if [ ! -f "$BIN_DIR/$dep_name" ]; then
+                        echo "  Looking for: $dep_name"
+                        if [ -f "/clangarm64/bin/$dep_name" ]; then
+                            cp "/clangarm64/bin/$dep_name" "$BIN_DIR/"
+                            echo "    -> Bundled from /clangarm64/bin/"
+                        elif [ -f "/usr/bin/$dep_name" ]; then
+                            cp "/usr/bin/$dep_name" "$BIN_DIR/"
+                            echo "    -> Bundled from /usr/bin/"
+                        else
+                            found_dep=$(find /clangarm64 /usr -name "$dep_name" -print -quit 2>/dev/null)
+                            if [ -n "$found_dep" ]; then
+                                cp "$found_dep" "$BIN_DIR/"
+                                echo "    -> Bundled from $found_dep"
+                            else
+                                echo "    -> WARNING: Could not find $dep_name"
+                            fi
                         fi
                     fi
                 done
