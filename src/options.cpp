@@ -128,9 +128,17 @@ std::vector<Options::WindowSystemOption> parse_window_system_options(
 
 }
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 Options::Options()
     : size{800, 600},
+#ifdef _WIN32
+      present_mode{vk::PresentModeKHR::eImmediate},
+#else
       present_mode{vk::PresentModeKHR::eMailbox},
+#endif
       pixel_format{vk::Format::eUndefined},
       list_scenes{false},
       show_all_options{false},
@@ -142,6 +150,21 @@ Options::Options()
       list_devices{false},
       use_device_with_uuid{}
 {
+#ifdef _WIN32
+    char path[MAX_PATH];
+    if (GetModuleFileNameA(NULL, path, MAX_PATH) > 0)
+    {
+        std::string exe_path(path);
+        auto last_slash = exe_path.find_last_of("\\/");
+        if (last_slash != std::string::npos)
+        {
+            std::string exe_dir = exe_path.substr(0, last_slash);
+            data_dir = exe_dir + "/data";
+            window_system_dir = exe_dir;
+        }
+    }
+#endif
+
     const char* var;
     var = getenv("VKMARK_WINDOW_SYSTEM_DIR");
     if (var)
@@ -161,7 +184,11 @@ std::string Options::help_string()
         "                              (the option can be used multiple times)\n"
         "  -s, --size WxH              Size of the output window (default: 800x600)\n"
         "      --fullscreen            Run fullscreen (equivalent to --size -1x-1)\n"
+#if defined(_WIN32)
+        "  -p, --present-mode PM       Vulkan present mode (default: immediate)\n"
+#else
         "  -p, --present-mode PM       Vulkan present mode (default: mailbox)\n"
+#endif
         "                              [immediate, mailbox, fifo, fiforelaxed]\n"
         "      --pixel-format PF       Vulkan pixel format (default: choose best)\n"
         "  -l, --list-scenes           Display information about the available scenes\n"
@@ -171,7 +198,11 @@ std::string Options::help_string()
         "      --winsys-dir DIR        Directory to search in for window system plugins\n"
         "      --data-dir DIR          Directory to search in for scene data files\n"
         "      --winsys WS             Window system plugin to use (default: choose best)\n"
+#if defined(_WIN32) 
+        "                              [win32, headless]\n"
+#else
         "                              [xcb, wayland, kms]\n"
+#endif
         "      --winsys-options OPTS   Window system options as 'opt1=val1(:opt2=val2)*'\n"
         "      --run-forever           Run indefinitely, looping from the last benchmark\n"
         "                              back to the first\n"

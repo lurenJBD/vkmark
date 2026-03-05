@@ -31,6 +31,12 @@ using VkMarkWindowSystemLoadOptionsFunc = void(*)(Options&);
 using VkMarkWindowSystemCreateFunc = std::unique_ptr<WindowSystem>(*)(Options const&);
 using VkMarkWindowSystemProbeFunc = int(*)(Options const&);
 
+#ifdef _WIN32
+#define VKMARK_PLUGIN_API __declspec(dllexport)
+#else
+#define VKMARK_PLUGIN_API
+#endif
+
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
@@ -43,9 +49,9 @@ using VkMarkWindowSystemProbeFunc = int(*)(Options const&);
 extern "C"
 {
 
-void vkmark_window_system_load_options(Options& options);
-int vkmark_window_system_probe(Options const&);
-std::unique_ptr<WindowSystem> vkmark_window_system_create(Options const& options);
+VKMARK_PLUGIN_API void vkmark_window_system_load_options(Options& options);
+VKMARK_PLUGIN_API int vkmark_window_system_probe(Options const&);
+VKMARK_PLUGIN_API std::unique_ptr<WindowSystem> vkmark_window_system_create(Options const& options);
 
 }
 

@@ -7,8 +7,13 @@ project(
     )
 
 root_incdir = include_directories('.')
-ws_dir = join_paths([get_option('prefix'), get_option('libdir'), 'vkmark'])
-data_dir = join_paths([get_option('prefix'), get_option('datadir'), 'vkmark'])
+if host_machine.system() == 'windows'
+    ws_dir = '.'
+    data_dir = 'data'
+else
+    ws_dir = join_paths([get_option('prefix'), get_option('libdir'), 'vkmark'])
+    data_dir = join_paths([get_option('prefix'), get_option('datadir'), 'vkmark'])
+endif
 
 add_global_arguments('-DVKMARK_WINDOW_SYSTEM_DIR="@0@"'.format(ws_dir), language : 'cpp')
 add_global_arguments('-DVKMARK_DATA_DIR="@0@"'.format(data_dir), language : 'cpp')
@@ -43,7 +48,9 @@ build_kms_ws = libdrm_dep.found() and gbm_dep.found() and get_option('kms') != '
 subdir('src')
 subdir('data')
 subdir('tests')
-subdir('doc')
+if host_machine.system() != 'windows'
+    subdir('doc')
+endif
 
 devenv = environment()
 devenv.set('VKMARK_WINDOW_SYSTEM_DIR', meson.current_build_dir() / 'src')
@@ -62,6 +69,22 @@ endif
 
 if build_kms_ws
     msg += 'kms '
+endif
+
+if host_machine.system() == 'windows'
+    # Cleanup import libraries and other unneeded files on Windows
+    meson.add_install_script('python3', '-c', '''
+import os, glob, shutil
+prefix = os.environ.get("MESON_INSTALL_DESTDIR_PREFIX", os.environ.get("MESON_INSTALL_PREFIX", ""))
+if prefix:
+    for f in glob.glob(os.path.join(prefix, "*.dll.a")):
+        try: os.remove(f)
+        except: pass
+    share_dir = os.path.join(prefix, "share")
+    if os.path.exists(share_dir):
+        try: shutil.rmtree(share_dir)
+        except: pass
+''')
 endif
 
 message(msg)

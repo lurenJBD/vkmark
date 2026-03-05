@@ -61,11 +61,16 @@ void set_up_sighandler(MainLoop& main_loop)
 {
     main_loop_global = &main_loop;
 
+#ifdef _WIN32
+    signal(SIGTERM, sighandler);
+    signal(SIGINT, sighandler);
+#else
     struct sigaction sa{};
     sa.sa_handler = sighandler;
 
     sigaction(SIGTERM, &sa, nullptr);
     sigaction(SIGINT, &sa, nullptr);
+#endif
 }
 
 void populate_scene_collection(SceneCollection& sc)

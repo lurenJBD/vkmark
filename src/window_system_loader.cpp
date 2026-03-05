@@ -49,7 +49,11 @@ bool string_ends_with(std::string const& str, std::string const& end)
 
 bool has_shared_object_extension(std::string const& name)
 {
+#ifdef _WIN32
+    return string_ends_with(name, ".dll");
+#else
     return string_ends_with(name, ".so");
+#endif
 }
 
 std::vector<std::string> files_in_dir(std::string dir)
@@ -194,7 +198,20 @@ void WindowSystemLoader::load_window_system_options()
 
 void WindowSystemLoader::for_each_window_system(ForeachCallback const& callback)
 {
-    auto const candidates = files_in_dir(options.window_system_dir);
+    auto candidates = files_in_dir(options.window_system_dir);
+
+#ifdef _WIN32
+    /* Fallback to search in current directory if needed */
+    if (options.window_system_dir != ".")
+    {
+        auto const local_candidates = files_in_dir(".");
+        for (auto const& c : local_candidates)
+        {
+            if (std::find(candidates.begin(), candidates.end(), c) == candidates.end())
+                candidates.push_back(c);
+        }
+    }
+#endif
 
     for (auto const& c : candidates)
     {
@@ -209,9 +226,27 @@ std::string WindowSystemLoader::window_system_from_name(std::string const& name)
 
     for (auto const& c : candidates)
     {
+#ifdef _WIN32
+        if (string_ends_with(c, name + ".dll"))
+            return c;
+#else
         if (string_ends_with(c, name + ".so"))
             return c;
+#endif
     }
+
+#ifdef _WIN32
+    /* Fallback search in current directory */
+    if (options.window_system_dir != ".")
+    {
+        auto const local_candidates = files_in_dir(".");
+        for (auto const& c : local_candidates)
+        {
+            if (string_ends_with(c, name + ".dll"))
+                return c;
+        }
+    }
+#endif
 
     throw std::runtime_error{"Failed to find specified window system '" + name + "'"};
 }

@@ -239,9 +239,23 @@ ManagedResource<vk::SwapchainKHR> SwapchainWindowSystem::create_vk_swapchain()
     if (std::find(present_modes.begin(), present_modes.end(), vk_present_mode) ==
             present_modes.end())
     {
+        std::string supported_modes;
+        for (auto const& mode : present_modes)
+        {
+            if (mode == vk::PresentModeKHR::eImmediate ||
+                mode == vk::PresentModeKHR::eMailbox ||
+                mode == vk::PresentModeKHR::eFifo ||
+                mode == vk::PresentModeKHR::eFifoRelaxed)
+            {
+                if (!supported_modes.empty())
+                    supported_modes += ", ";
+                supported_modes += to_string(mode);
+            }
+        }
         throw std::runtime_error{
             "Selected present mode " + to_string(vk_present_mode) +
-            " is not supported by the used Vulkan physical device."};
+            " is not supported by the used Vulkan physical device. "
+            "Available modes are: " + supported_modes};
     }
 
     // Try to enable triple buffering

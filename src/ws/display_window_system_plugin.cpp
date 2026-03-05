@@ -45,7 +45,10 @@ std::string get_display_index_option(Options const& options)
 
 }
 
-void vkmark_window_system_load_options(Options& options)
+extern "C"
+{
+
+VKMARK_PLUGIN_API void vkmark_window_system_load_options(Options& options)
 {
     options.add_window_system_help(
         "Display window system options (pass in --winsys-options)\n"
@@ -53,7 +56,7 @@ void vkmark_window_system_load_options(Options& options)
         );
 }
 
-int vkmark_window_system_probe(Options const& options)
+VKMARK_PLUGIN_API int vkmark_window_system_probe(Options const& options)
 {
     auto const app_info = vk::ApplicationInfo{}
         .setPApplicationName("vkmark")
@@ -62,6 +65,15 @@ int vkmark_window_system_probe(Options const& options)
 #else
         .setApiVersion(VK_MAKE_VERSION(1, 0, 0));
 #endif
+
+    auto const supported_extensions = vk::enumerateInstanceExtensionProperties();
+    auto const is_supported = [&](char const* name) {
+        return std::any_of(supported_extensions.begin(), supported_extensions.end(),
+                           [&](auto const& ext) { return strcmp(ext.extensionName, name) == 0; });
+    };
+
+    if (!is_supported(VK_KHR_SURFACE_EXTENSION_NAME) || !is_supported(VK_KHR_DISPLAY_EXTENSION_NAME))
+        return VKMARK_WINDOW_SYSTEM_PROBE_BAD;
 
     auto const exts = std::array<char const*, 2>{
         VK_KHR_SURFACE_EXTENSION_NAME,
@@ -104,7 +116,7 @@ int vkmark_window_system_probe(Options const& options)
     return VKMARK_WINDOW_SYSTEM_PROBE_BAD;
 }
 
-std::unique_ptr<WindowSystem> vkmark_window_system_create(Options const& options)
+VKMARK_PLUGIN_API std::unique_ptr<WindowSystem> vkmark_window_system_create(Options const& options)
 {
     unsigned int display_index = 0;
 
@@ -135,4 +147,6 @@ std::unique_ptr<WindowSystem> vkmark_window_system_create(Options const& options
         std::make_unique<DisplayNativeSystem>(display_index),
         options.present_mode,
         options.pixel_format);
+}
+
 }

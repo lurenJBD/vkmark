@@ -60,12 +60,34 @@ scene_sources = files(
     'scenes/vertex_scene.cpp',
     )
 
-vkmark_core = static_library(
-    'vkmark-core',
-    core_sources,
-    dependencies : [vulkan_dep, dl_dep, assimp_dep],
-    cpp_pch: 'pch/cpp_pch.h'
-    )
+if host_machine.system() == 'windows'
+    vkmark_core = static_library(
+        'vkmark-core',
+        core_sources,
+        dependencies : [vulkan_dep, dl_dep, assimp_dep],
+        cpp_pch: 'pch/cpp_pch.h',
+        install : false
+        )
+else
+    vkmark_core = static_library(
+        'vkmark-core',
+        core_sources,
+        dependencies : [vulkan_dep, dl_dep, assimp_dep],
+        cpp_pch: 'pch/cpp_pch.h'
+        )
+endif
+
+win_link_args = []
+if host_machine.system() == 'windows'
+    # Force static linking for core runtimes (libgcc, libstdc++, libwinpthread)
+    win_link_args += ['-static']
+    # Handle duplicate symbols in std::__cxx11::basic_string caused by mixing link types
+    win_link_args += ['-Wl,--allow-multiple-definition']
+    # dlfcn-win32 static part
+    win_link_args += ['-Wl,-Bstatic', '-ldl']
+    # Explicitly switch back to dynamic for DLL dependencies
+    win_link_args += ['-Wl,-Bdynamic']
+endif
 
 vkmark = executable(
     'vkmark',
@@ -73,8 +95,11 @@ vkmark = executable(
     link_with: vkmark_core,
     dependencies : [vulkan_dep, glm_dep, dl_dep],
     cpp_pch: 'pch/cpp_pch.h',
-    link_args: ['-Wl,--dynamic-list=' + join_paths([meson.current_source_dir(), 'dynamic.list'])],
-    install : true
+    link_args: host_machine.system() != 'windows' ? 
+        ['-Wl,--dynamic-list=' + join_paths([meson.current_source_dir(), 'dynamic.list'])] : 
+        win_link_args,
+    install : true,
+    install_dir : host_machine.system() == 'windows' ? '.' : get_option('bindir')
     )
 
 headless_ws = shared_module(
@@ -82,7 +107,9 @@ headless_ws = shared_module(
     'ws/headless_window_system_plugin.cpp',
     'ws/headless_native_system.cpp',
     'ws/swapchain_window_system.cpp',
+    link_with: vkmark_core,
     dependencies : [vulkan_dep],
+    link_args: win_link_args,
     name_prefix : '',
     install : true,
     install_dir : ws_dir
@@ -93,7 +120,9 @@ display_ws = shared_module(
     'ws/display_window_system_plugin.cpp',
     'ws/display_native_system.cpp',
     'ws/swapchain_window_system.cpp',
+    link_with: vkmark_core,
     dependencies : [vulkan_dep],
+    link_args: win_link_args,
     name_prefix : '',
     install : true,
     install_dir : ws_dir
@@ -105,6 +134,7 @@ if build_xcb_ws
         'ws/xcb_window_system_plugin.cpp',
         'ws/xcb_native_system.cpp',
         'ws/swapchain_window_system.cpp',
+        link_with: vkmark_core,
         dependencies : [vulkan_dep, xcb_dep, xcb_icccm_dep],
         name_prefix : '',
         install : true,
@@ -137,6 +167,7 @@ if build_wayland_ws
         'ws/swapchain_window_system.cpp',
         xdg_shell_client_header,
         xdg_shell_private_code,
+        link_with: vkmark_core,
         dependencies : [vulkan_dep, wayland_client_dep],
         name_prefix : '',
         install : true,
@@ -157,7 +188,24 @@ if build_kms_ws
         'ws/kms_window_system_plugin.cpp',
         'ws/kms_window_system.cpp',
         'ws/atomic_kms_window_system.cpp',
+        link_with: vkmark_core,
         dependencies : [vulkan_dep, libdrm_dep, gbm_dep, gbm_mods2_dep],
+        name_prefix : '',
+        install : true,
+        install_dir : ws_dir
+        )
+endif
+
+if host_machine.system() == 'windows'
+    win32_ws = shared_module(
+        'win32',
+        'ws/win32_window_system_plugin.cpp',
+        'ws/win32_native_system.cpp',
+        'ws/swapchain_window_system.cpp',
+        link_with: vkmark_core,
+        dependencies : [vulkan_dep],
+        link_args: win_link_args,
+        cpp_args : ['-DVK_USE_PLATFORM_WIN32_KHR'],
         name_prefix : '',
         install : true,
         install_dir : ws_dir

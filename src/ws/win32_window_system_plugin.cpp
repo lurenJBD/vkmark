@@ -15,17 +15,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with vkmark. If not, see <http://www.gnu.org/licenses/>.
- *
- * Authors:
- *   Alexandros Frantzis <alexandros.frantzis@collabora.com>
  */
 
+#include "win32_native_system.h"
 #include "window_system_plugin.h"
 #include "swapchain_window_system.h"
-#include "headless_native_system.h"
 #include "window_system_priority.h"
-
-#include "log.h"
 #include "options.h"
 
 extern "C"
@@ -37,36 +32,16 @@ VKMARK_PLUGIN_API void vkmark_window_system_load_options(Options&)
 
 VKMARK_PLUGIN_API int vkmark_window_system_probe(Options const&)
 {
-    auto const supported_extensions = vk::enumerateInstanceExtensionProperties();
-    auto const is_supported = [&](char const* name) {
-        return std::any_of(supported_extensions.begin(), supported_extensions.end(),
-                           [&](auto const& ext) { return strcmp(ext.extensionName, name) == 0; });
-    };
-
-    if (!is_supported(VK_KHR_SURFACE_EXTENSION_NAME) || !is_supported(VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME))
-        return VKMARK_WINDOW_SYSTEM_PROBE_BAD;
-
-    return VKMARK_WINDOW_SYSTEM_PROBE_OK + VKMARK_HEADLESS_WINDOW_SYSTEM_PRIORITY;
+    return VKMARK_WIN32_WINDOW_SYSTEM_PRIORITY;
 }
 
 VKMARK_PLUGIN_API std::unique_ptr<WindowSystem> vkmark_window_system_create(Options const& options)
 {
-    vk::Extent2D size;
-
-    if (options.size.first < 0 || options.size.second < 0)
-    {
-        Log::warning("HeadlessWindowSystemPlugin: Ignoring invalid size, using 800x600\n");
-        size.setWidth(800);
-        size.setHeight(600);
-    }
-    else
-    {
-        size.setWidth(static_cast<uint32_t>(options.size.first));
-        size.setHeight(static_cast<uint32_t>(options.size.second));
-    }
-
+    auto native_system = std::make_unique<Win32NativeSystem>(
+        vk::Extent2D{static_cast<uint32_t>(options.size.first),
+                     static_cast<uint32_t>(options.size.second)});
     return std::make_unique<SwapchainWindowSystem>(
-        std::make_unique<HeadlessNativeSystem>(size),
+        std::move(native_system),
         options.present_mode,
         options.pixel_format);
 }

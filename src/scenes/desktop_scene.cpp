@@ -29,7 +29,13 @@
 #include "vkutil/vkutil.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#ifdef _WIN32
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+#else
 #include <cmath>
+#endif
 
 namespace
 {
@@ -211,8 +217,13 @@ void DesktopScene::setup(
     {
         windows[i] = std::make_unique<RenderObject>(*vulkan, "textures/desktop-window.png", vulkan_images.size());
         windows[i]->size = window_size;
+#ifdef _WIN32
+        windows[i]->speed = glm::vec2(std::cos(0.1 + i * M_PI / 6.0) * 2.0 / 3,
+                                      std::sin(0.1 + i * M_PI / 6.0) * 2.0 / 3);
+#else
         windows[i]->speed = {std::cos(0.1 + i * M_PI / 6.0) * 2.0 / 3,
                              std::sin(0.1 + i * M_PI / 6.0) * 2.0 / 3};
+#endif
     }
 
     setup_vertex_buffer();

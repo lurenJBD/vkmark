@@ -118,9 +118,17 @@ void VulkanState::log_all_devices()
         .setApiVersion(VK_MAKE_VERSION(1, 0, 0));
 #endif
 
-    auto const enabled_extensions = std::array<char const*, 2>{
-        VK_KHR_SURFACE_EXTENSION_NAME,
-        VK_KHR_DISPLAY_EXTENSION_NAME};
+    auto const supported_extensions = vk::enumerateInstanceExtensionProperties();
+    auto const is_supported = [&](char const* name) {
+        return std::any_of(supported_extensions.begin(), supported_extensions.end(),
+                           [&](auto const& ext) { return strcmp(ext.extensionName, name) == 0; });
+    };
+
+    std::vector<char const*> enabled_extensions;
+    if (is_supported(VK_KHR_SURFACE_EXTENSION_NAME))
+        enabled_extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+    if (is_supported(VK_KHR_DISPLAY_EXTENSION_NAME))
+        enabled_extensions.push_back(VK_KHR_DISPLAY_EXTENSION_NAME);
 
     auto const create_info = vk::InstanceCreateInfo{}
         .setPApplicationInfo(&app_info)
@@ -137,14 +145,17 @@ void VulkanState::log_all_devices()
     {
         Log::info("=== Physical Device %d ===\n", i);
         log_device_info(physical_devices[i]);
-        auto const display_props = physical_devices[i].getDisplayPropertiesKHR();
-        for (unsigned i = 0; i < display_props.size(); ++i)
+        if (is_supported(VK_KHR_DISPLAY_EXTENSION_NAME))
         {
-            Log::info("    Display %d:      %s %ux%u\n",
-                      i,
-                      display_props[i].displayName,
-                      display_props[i].physicalResolution.width,
-                      display_props[i].physicalResolution.height);
+            auto const display_props = physical_devices[i].getDisplayPropertiesKHR();
+            for (unsigned j = 0; j < display_props.size(); ++j)
+            {
+                Log::info("    Display %d:      %s %ux%u\n",
+                          j,
+                          display_props[j].displayName,
+                          display_props[j].physicalResolution.width,
+                          display_props[j].physicalResolution.height);
+            }
         }
     }
 }
@@ -159,7 +170,27 @@ void VulkanState::create_instance(VulkanWSI& vulkan_wsi)
         .setApiVersion(VK_MAKE_VERSION(1, 0, 0));
 #endif
 
-    std::vector<char const*> enabled_extensions{vulkan_wsi.required_extensions().instance};
+    auto const supported_extensions = vk::enumerateInstanceExtensionProperties();
+    auto const is_supported = [&](char const* name) {
+        return std::any_of(supported_extensions.begin(), supported_extensions.end(),
+                           [&](auto const& ext) { return strcmp(ext.extensionName, name) == 0; });
+    };
+
+    std::vector<char const*> requested_extensions{vulkan_wsi.required_extensions().instance};
+    std::vector<char const*> enabled_extensions;
+
+    for (auto const& ext : requested_extensions)
+    {
+        if (is_supported(ext))
+        {
+            enabled_extensions.push_back(ext);
+        }
+        else
+        {
+            Log::debug("VulkanState: Instance extension %s is not supported, skipping\n", ext);
+        }
+    }
+
     std::vector<char const*> validation_layers;
 
     bool have_debug_extensions = false;
@@ -171,9 +202,12 @@ void VulkanState::create_instance(VulkanWSI& vulkan_wsi)
         {
             if(strcmp(layer.layerName, "VK_LAYER_KHRONOS_validation") == 0)
             {
-                have_debug_extensions = true;
-                validation_layers.push_back("VK_LAYER_KHRONOS_validation");
-                enabled_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+                if (is_supported(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+                {
+                    have_debug_extensions = true;
+                    validation_layers.push_back("VK_LAYER_KHRONOS_validation");
+                    enabled_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+                }
                 break;
             }
         }
@@ -203,9 +237,16 @@ void VulkanState::create_instance(VulkanWSI& vulkan_wsi)
             .setPfnUserCallback(debug_callback);
         auto const dud = DebugUtilsDispatcher{vk_instance};
 
-        debug_messenger = ManagedResource<vk::DebugUtilsMessengerEXT>{
-            instance().createDebugUtilsMessengerEXT(debug_create_info, nullptr, dud),
-            [this, dud] (auto& d) {instance().destroyDebugUtilsMessengerEXT(d, nullptr, dud);}};
+        VkDebugUtilsMessengerEXT raw_messenger;
+        VkDebugUtilsMessengerCreateInfoEXT raw_create_info = debug_create_info;
+        if (dud.vkCreateDebugUtilsMessengerEXT(vk_instance.raw, &raw_create_info, nullptr, &raw_messenger) == VK_SUCCESS)
+        {
+            debug_messenger = ManagedResource<vk::DebugUtilsMessengerEXT>{
+                vk::DebugUtilsMessengerEXT(raw_messenger),
+                [this, dud] (vk::DebugUtilsMessengerEXT& d) {
+                    dud.vkDestroyDebugUtilsMessengerEXT(this->vk_instance.raw, d, nullptr);
+                }};
+        }
     }
     else
     {

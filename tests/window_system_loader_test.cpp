@@ -71,8 +71,13 @@ private:
 
     LibHandle open_window_system(int id)
     {
+#ifdef _WIN32
+        auto const ext = std::string{".dll"};
+#else
+        auto const ext = std::string{".so"};
+#endif
         auto const path = std::string{VKMARK_TEST_WINDOW_SYSTEM_DIR} + "/" +
-                          name_from_id(id) + ".so";
+                          name_from_id(id) + ext;
         auto const handle = dlopen(path.c_str(), RTLD_LAZY);
         if (!handle)
             throw std::runtime_error{"Failed to load test window system " + path};

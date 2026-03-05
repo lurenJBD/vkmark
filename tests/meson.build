@@ -54,7 +54,7 @@ vkmark_tests = executable(
     cpp_pch: 'pch/cpp_pch.h',
     cpp_args : ['-DVKMARK_TEST_DATA_DIR="@0@"'.format(test_data_dir),
                 '-DVKMARK_TEST_WINDOW_SYSTEM_DIR="@0@"'.format(test_window_system_dir)],
-    dependencies : thread_dep
+    dependencies : [thread_dep, dl_dep]
     )
 
 test('vkmark tests', vkmark_tests)
