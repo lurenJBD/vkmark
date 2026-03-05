@@ -67,27 +67,16 @@ jobs:
                 echo "--- ldd output for $target ---"
                 ldd "$target" || true
                 echo "------------------------------"
-                # Extract just the DLL filename
-                deps=$(ldd "$target" 2>/dev/null | grep -i '\.dll' | grep -v -i 'c:/windows' | grep -v -i 'system32' | awk '{print $1}')
+                # Extract absolute MSYS2 paths directly from ldd output
+                deps=$(ldd "$target" 2>/dev/null | grep "=>" | grep -v "not found" | awk '{print $3}' | grep -i -E "^(/clangarm64|/usr)/")
                 echo "Parsed deps for $(basename "$target"):"
                 echo "$deps"
-                for dep_name in $deps; do
-                    if [ ! -f "$BIN_DIR/$dep_name" ]; then
-                        echo "  Looking for: $dep_name"
-                        if [ -f "/clangarm64/bin/$dep_name" ]; then
-                            cp "/clangarm64/bin/$dep_name" "$BIN_DIR/"
-                            echo "    -> Bundled from /clangarm64/bin/"
-                        elif [ -f "/usr/bin/$dep_name" ]; then
-                            cp "/usr/bin/$dep_name" "$BIN_DIR/"
-                            echo "    -> Bundled from /usr/bin/"
-                        else
-                            found_dep=$(find /clangarm64 /usr -name "$dep_name" -print -quit 2>/dev/null)
-                            if [ -n "$found_dep" ]; then
-                                cp "$found_dep" "$BIN_DIR/"
-                                echo "    -> Bundled from $found_dep"
-                            else
-                                echo "    -> WARNING: Could not find $dep_name"
-                            fi
+                for dep_path in $deps; do
+                    if [ -f "$dep_path" ]; then
+                        dep_name=$(basename "$dep_path")
+                        if [ ! -f "$BIN_DIR/$dep_name" ]; then
+                            echo "  Bundling: $dep_name from $dep_path"
+                            cp "$dep_path" "$BIN_DIR/"
                         fi
                     fi
                 done
