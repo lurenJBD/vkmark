@@ -64,7 +64,11 @@ jobs:
         for target in "$BIN_DIR"/*.exe "$BIN_DIR"/*.dll; do
             if [ -f "$target" ]; then
                 echo "Processing $(basename "$target")..."
-                deps=$(ldd "$target" | grep "=>" | grep -v -i "/c/WINDOWS" | awk '{print $3}')
+                echo "--- ldd output for $target ---"
+                ldd "$target"
+                echo "------------------------------"
+                deps=$(ldd "$target" | grep -i "\.dll" | grep -v -i "c:/windows" | awk '{print $3}' | grep -i "\.dll")
+                echo "Parsed deps for $(basename "$target"): $deps"
                 for dep in $deps; do
                     if [ -f "$dep" ]; then
                         dep_name=$(basename "$dep")
