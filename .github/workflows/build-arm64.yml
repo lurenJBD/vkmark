@@ -57,7 +57,7 @@ jobs:
 
     - name: Bundle DLLs
       run: |
-        BIN_DIR="install_vkmark_mingw_arm64/bin"
+        BIN_DIR="install_vkmark_mingw_arm64"
         echo "Scanning for dependencies in $BIN_DIR..."
         
         # Scan all executables and DLLs in the directory
