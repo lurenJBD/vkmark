@@ -1,0 +1,63 @@
+name: Build ARM64
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build-mingw-arm64:
+    runs-on: windows-11-arm
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: CLANGARM64
+        update: true
+        install: >-
+          git
+        pacboy: >-
+          toolchain:p
+          meson:p
+          ninja:p
+          pkgconf:p
+          vulkan-loader:p
+          vulkan-headers:p
+          glm:p
+          assimp:p
+          dlfcn:p
+          clang:p
+
+    - name: Configure vkmark
+      run: |
+        CC=clang CXX=clang++ meson setup build \
+          --buildtype=release \
+          -Ddebug=false \
+          -Dxcb=false \
+          -Dwayland=false \
+          -Dkms=false \
+          -Db_pch=false \
+          --prefix="$PWD/install_vkmark_mingw_arm64"
+
+    - name: Build and Install vkmark
+      run: |
+        ninja -C build
+        meson install -C build
+
+    - name: Show meson logs on failure
+      if: failure()
+      run: cat build/meson-logs/meson-log.txt
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: vkmark-mingw-arm64
+        path: install_vkmark_mingw_arm64
+        compression-level: 9
