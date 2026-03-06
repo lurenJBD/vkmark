@@ -60,40 +60,43 @@ jobs:
         BIN_DIR="install_vkmark_mingw_arm64"
         echo "Scanning for dependencies in $BIN_DIR..."
         
-        # Capture the initial list of executables and DLLs so we don't infinitely process newly copied DLLs
-        mapfile -t targets < <(find "$BIN_DIR" -maxdepth 1 -type f \( -name "*.exe" -o -name "*.dll" \))
-        for target in "${targets[@]}"; do
-            if [ -f "$target" ]; then
-                echo "Processing $(basename "$target")..."
-                echo "--- objdump output for $target ---"
-                # Use objdump instead of ldd to avoid access violation crashes on ARM64
+        # Since objdump only lists direct dependencies, we need to loop recursively
+        # until no new dependencies are found.
+        while true; do
+            added_dlls=0
+            mapfile -t targets < <(find "$BIN_DIR" -maxdepth 1 -type f \( -name "*.exe" -o -name "*.dll" \))
+            for target in "${targets[@]}"; do
                 deps=$(objdump -p "$target" 2>/dev/null | grep -i "DLL Name" | awk '{print $3}')
-                echo "Parsed deps for $(basename "$target"):"
-                echo "$deps"
                 for dep_name in $deps; do
                     # Ignore standard Windows system DLLs
-                    if [[ "$dep_name" =~ ^(?i)(KERNEL32|KERNELBASE|ntdll|USER32|ADVAPI32|SHELL32|WS2_32|GDI32|CFGMGR32|msvcrt|ucrtbase).*$ ]]; then
+                    if [[ "$dep_name" =~ ^(?i)(KERNEL32|KERNELBASE|ntdll|USER32|ADVAPI32|SHELL32|WS2_32|GDI32|CFGMGR32|msvcrt|ucrtbase|RPCRT4|sechost).*$ ]]; then
                         continue
                     fi
                     if [ ! -f "$BIN_DIR/$dep_name" ]; then
-                        echo "  Looking for: $dep_name"
+                        echo "  Missing dependency: $dep_name (required by $(basename "$target"))"
                         if [ -f "/clangarm64/bin/$dep_name" ]; then
                             cp "/clangarm64/bin/$dep_name" "$BIN_DIR/"
                             echo "    -> Bundled from /clangarm64/bin/"
+                            added_dlls=1
                         elif [ -f "/usr/bin/$dep_name" ]; then
                             cp "/usr/bin/$dep_name" "$BIN_DIR/"
                             echo "    -> Bundled from /usr/bin/"
+                            added_dlls=1
                         else
                             found_dep=$(find /clangarm64 /usr -name "$dep_name" -print -quit 2>/dev/null)
                             if [ -n "$found_dep" ]; then
                                 cp "$found_dep" "$BIN_DIR/"
                                 echo "    -> Bundled from $found_dep"
+                                added_dlls=1
                             else
                                 echo "    -> WARNING: Could not find $dep_name"
                             fi
                         fi
                     fi
                 done
+            done
+            if [ "$added_dlls" -eq 0 ]; then
+                break
             fi
         done
 
